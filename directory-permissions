@@ -1,4 +1,4 @@
-#!bin/bash
+#!/bin/bash
 
 # Create a directory called: “test-directory” and a new file inside it called: “test.txt”:
 mkdir test-directory && touch test-directory/test.txt
