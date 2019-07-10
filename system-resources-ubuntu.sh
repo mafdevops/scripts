@@ -12,7 +12,7 @@ sudo apt install -y sysstat
 iostat
 
 # Count number of lines in a file: create a new file, add contents to it from a URL, and count the total number of lines: 
-touch numberoflinex.txt
+touch numberoflines.txt
 wget "https://ubuntu.com/about" -O numberoflines.txt
 wc –l numberoflines.txt
 
