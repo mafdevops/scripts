@@ -11,8 +11,6 @@ sudo apt-get install -y python3.6
 
 sudo apt install -y python3-pip
 
-then install the modules using pip3
-
 pip3 install pysftp
 
 pip3 install paramiko
