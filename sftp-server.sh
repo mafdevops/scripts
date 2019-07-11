@@ -16,8 +16,8 @@ sudo systemctl restart ssh.service
 sudo groupadd sftp_users
 
 # create new user called backup, add it to the group, and set his password
-sudo usermod -aG sftp_users backup
-passwd backup
+sudo usermod -aG sftp_users sftp
+passwd sftp
 
 # giev the grou pwrite permission to user home directory 
 sudo chgrp -R sftp_users /home/ubuntu/
