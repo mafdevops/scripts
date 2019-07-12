@@ -47,7 +47,7 @@ Parameters:
     MaxValue: '50'
 
   SubnetAvailabilityZone:
-    Description: Availability Zone for subnet
+    Description: Availability Zone for Application server
     Type: String
     Default: eu-west-1a
     AllowedValues:
@@ -55,6 +55,8 @@ Parameters:
       - eu-west-1b
       - eu-west-1c
     ConstraintDescription: Must be a valid Availability zone.
+
+
 
 
 ###############################################################################################################
@@ -367,7 +369,6 @@ Resources:
                 Action: '*'
                 Resource: '*'
 
-
   UserHostKey:
     Type: AWS::IAM::AccessKey
     Properties:
@@ -420,9 +421,8 @@ Resources:
             - !Ref 'AWS::Region'
             - '/usr/local/bin/cfn-signal --exit-code $? '
             - |
+              service tomcat7 start
               '
-
-
     Metadata:
       "AWS::CloudFormation::Init":
         config:
@@ -431,6 +431,341 @@ Resources:
               java-1.6.0-openjdk: []
               tomcat6: []
               httpd: []
+
+
+
+
+
+
+  MySQLMaster1:
+    Type: 'AWS::EC2::Instance'
+    Properties:
+      AvailabilityZone: 'eu-west-1b'
+      ImageId: 'ami-01e6a0b85de033c99'
+      InstanceType:
+        Ref: InstanceType
+      KeyName:
+        Ref: KeyName
+      SecurityGroupIds:
+        - Ref: PrivateBSecurityGroup
+      SubnetId:
+        Ref: SubnetBPrivate
+      BlockDeviceMappings:
+        - DeviceName: /dev/xvda
+          Ebs:
+            VolumeSize:
+              Ref: RootVolumeSize
+            VolumeType: gp2
+      UserData: !Base64
+        'Fn::Join':
+          - ''
+          - - |
+              #!/bin/bash -ex
+            - |
+              apt-get update
+            - |
+              apt-get -y install python-setuptools
+            - |
+              mkdir aws-cfn-bootstrap-latest
+            - >
+              curl
+              https://s3.amazonaws.com/cloudformation-examples/aws-cfn-bootstrap-latest.tar.gz
+              | tar xz -C aws-cfn-bootstrap-latest
+              --strip-components 1
+            - |
+              easy_install aws-cfn-bootstrap-latest
+            - '/usr/local/bin/cfn-init --stack '
+            - !Ref 'AWS::StackName'
+            - ' --resource MySQLMaster1'
+            - ' --region '
+            - !Ref 'AWS::Region'
+            - '/usr/local/bin/cfn-signal --exit-code $? '
+            - |
+              service mysqld restart
+              '
+    Metadata:
+      "AWS::CloudFormation::Init":
+        configSets:
+          InstallAndRun:
+            - Install
+            - Configure
+        Install:
+          packages:
+            apt:
+              mysql-server: []
+          files:
+            /etc/mysql/my.cnf:
+              content: !Join
+                - ''
+                - - |
+                    server-id               = 1
+                  - |
+                    log_bin                 = /var/log/mysql/mysql-bin.log
+                  - |
+                    binlog_do_db            = masterdb
+                  - |
+                    # bind-address            = 127.0.0.1
+              mode: '000400'
+              owner: root
+              group: root
+            /tmp/setup.mysql:
+              content: !Join
+                - ''
+                - - 'CREATE DATABASE '
+                  - master1
+                  - |2
+                     CHARACTER SET utf8 COLLATE utf8_general_ci;
+                  - 'GRANT ALL ON '
+                  - master1
+                  - .* TO '
+                  - replicatoruser
+                  - '''@localhost IDENTIFIED BY '''
+                  - replicatorpassword
+                  - |
+                    ';
+                  - 'grant select,insert,update on '
+                  - master1
+                  - |
+                    .* to 'yours';
+              mode: '000400'
+              owner: root
+              group: root
+
+            /etc/cfn/cfn-hup.conf:
+              content: !Join
+                - ''
+                - - |
+                    [main]
+                  - stack=
+                  - !Ref 'AWS::StackId'
+              mode: '000400'
+              owner: root
+              group: root
+            /etc/cfn/hooks.d/cfn-auto-reloader.conf:
+              content: !Join
+                - ''
+                - - |
+                    [cfn-auto-reloader-hook]
+                  - |
+                    triggers=post.update
+                  - >
+                    path=Resources.WebServerInstance.Metadata.AWS::CloudFormation::Init
+                  - 'action=/opt/aws/bin/cfn-init -v '
+                  - '         --stack '
+                  - !Ref 'AWS::StackName'
+                  - '         --resource WebServerInstance '
+                  - '         --configsets InstallAndRun '
+                  - '         --region '
+                  - !Ref 'AWS::Region'
+                  - |+
+
+                  - |
+                    runas=root
+              mode: '000400'
+              owner: root
+              group: root
+
+          services:
+            sysvinit:
+              mysqld:
+                enabled: 'true'
+                ensureRunning: 'true'
+              cfn-hup:
+                enabled: 'true'
+                ensureRunning: 'true'
+                files:
+                  - /etc/cfn/cfn-hup.conf
+                  - /etc/cfn/hooks.d/cfn-auto-reloader.conf
+        Configure:
+          commands:
+            01_set_mysql_root_password:
+              command: !Join 
+              - ''
+              - - mysqladmin -u root password '
+                - root
+                - ''''
+            02_create_database:
+              command: !Join
+              - ''
+              - - mysql -u root --password='
+                - root
+                - ''' < /tmp/setup.mysql'
+
+
+
+  MySQLMaster2:
+    Type: 'AWS::EC2::Instance'
+    Properties:
+      AvailabilityZone: 'eu-west-1b'
+      ImageId: 'ami-01e6a0b85de033c99'
+      InstanceType:
+        Ref: InstanceType
+      KeyName:
+        Ref: KeyName
+      SecurityGroupIds:
+        - Ref: PrivateBSecurityGroup
+      SubnetId:
+        Ref: SubnetBPrivate
+      BlockDeviceMappings:
+        - DeviceName: /dev/xvda
+          Ebs:
+            VolumeSize:
+              Ref: RootVolumeSize
+            VolumeType: gp2
+      UserData: !Base64
+        'Fn::Join':
+          - ''
+          - - |
+              #!/bin/bash -ex
+            - |
+              apt-get update
+            - |
+              apt-get -y install python-setuptools
+            - |
+              mkdir aws-cfn-bootstrap-latest
+            - >
+              curl
+              https://s3.amazonaws.com/cloudformation-examples/aws-cfn-bootstrap-latest.tar.gz
+              | tar xz -C aws-cfn-bootstrap-latest
+              --strip-components 1
+            - |
+              easy_install aws-cfn-bootstrap-latest
+            - '/usr/local/bin/cfn-init --stack '
+            - !Ref 'AWS::StackName'
+            - ' --resource MySQLMaster2'
+            - ' --region '
+            - !Ref 'AWS::Region'
+            - '/usr/local/bin/cfn-signal --exit-code $? '
+            - |
+              service mysqld restart
+              '
+    Metadata:
+      "AWS::CloudFormation::Init":
+        configSets:
+          InstallAndRun:
+            - Install
+            - Configure
+        Install:
+          packages:
+            apt:
+              mysql-server: []
+          files:
+            /etc/mysql/my.cnf:
+              content: !Join
+                - ''
+                - - |
+                    server-id               = 2
+                  - |
+                    log_bin                 = /var/log/mysql/mysql-bin.log
+                  - |
+                    binlog_do_db            = masterdb
+                  - |
+                    # bind-address            = 127.0.0.1
+              mode: '000400'
+              owner: root
+              group: root
+            /tmp/setup.mysql:
+              content: !Join
+                - ''
+                - - 'CREATE DATABASE '
+                  - master2
+                  - |2
+                     CHARACTER SET utf8 COLLATE utf8_general_ci;
+                  - 'GRANT ALL ON '
+                  - master2
+                  - .* TO '
+                  - replicatoruser
+                  - '''@localhost IDENTIFIED BY '''
+                  - replicatorpassword
+                  - |
+                    ';
+                  - 'grant select,insert,update on '
+                  - master2
+                  - |
+                    .* to 'yours';
+              mode: '000400'
+              owner: root
+              group: root
+            /etc/cfn/cfn-hup.conf:
+              content: !Join
+                - ''
+                - - |
+                    [main]
+                  - stack=
+                  - !Ref 'AWS::StackId'
+              mode: '000400'
+              owner: root
+              group: root
+            /etc/cfn/hooks.d/cfn-auto-reloader.conf:
+              content: !Join
+                - ''
+                - - |
+                    [cfn-auto-reloader-hook]
+                  - |
+                    triggers=post.update
+                  - >
+                    path=Resources.WebServerInstance.Metadata.AWS::CloudFormation::Init
+                  - 'action=/opt/aws/bin/cfn-init -v '
+                  - '         --stack '
+                  - !Ref 'AWS::StackName'
+                  - '         --resource WebServerInstance '
+                  - '         --configsets InstallAndRun '
+                  - '         --region '
+                  - !Ref 'AWS::Region'
+                  - |+
+
+                  - |
+                    runas=root
+              mode: '000400'
+              owner: root
+              group: root
+
+          services:
+            sysvinit:
+              mysqld:
+                enabled: 'true'
+                ensureRunning: 'true'
+              cfn-hup:
+                enabled: 'true'
+                ensureRunning: 'true'
+                files:
+                  - /etc/cfn/cfn-hup.conf
+                  - /etc/cfn/hooks.d/cfn-auto-reloader.conf
+        Configure:
+          commands:
+            01_set_mysql_root_password:
+              command: !Join 
+              - ''
+              - - mysqladmin -u root password '
+                - root
+                - ''''
+            02_create_database:
+              command: !Join
+              - ''
+              - - mysql -u root --password='
+                - root
+                - ''' < /tmp/setup.mysql'
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
