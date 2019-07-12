@@ -1,5 +1,4 @@
 
-
 AWSTemplateFormatVersion: '2010-09-09'
 Description: 'VPC: public and private subnets in two availability zones'
 
@@ -244,7 +243,7 @@ Resources:
     Type: 'AWS::EC2::NetworkAclEntry'
     Properties:
       NetworkAclId: !Ref NetworkAclPrivate
-      RuleNumber: 99
+      RuleNumber: 98
       Protocol: 6
       RuleAction: allow
       Egress: false
@@ -297,7 +296,7 @@ Resources:
       SecurityGroupEgress:
         - IpProtocol: tcp
           FromPort: 0
-          FromPort: 65535
+          ToPort: 65535
           CidrIp: 0.0.0.0/0
 
 
@@ -315,7 +314,7 @@ Resources:
       SecurityGroupEgress:
         - IpProtocol: tcp
           FromPort: 0
-          FromPort: 65535
+          ToPort: 65535
           CidrIp: 0.0.0.0/0
 
 
